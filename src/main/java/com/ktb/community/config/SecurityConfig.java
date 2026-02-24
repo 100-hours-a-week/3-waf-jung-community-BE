@@ -62,7 +62,7 @@ public class SecurityConfig {
             allowedOrigins.add("http://localhost:3000");
             allowedOrigins.add("http://localhost");
         }
-        
+
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

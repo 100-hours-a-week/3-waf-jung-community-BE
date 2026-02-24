@@ -1,34 +1,47 @@
-# PLAN.md - KTB Community 프로젝트 구현 계획
+---
+name: implementation-plan
+description: Phase별 구현 로드맵 및 진행 상황. 현재 Phase 확인, 체크리스트 업데이트, FR-Phase 매핑 파악 시 참조.
+---
+
+# PLAN.md - DC2 Community 프로젝트 구현 계획
+
+**Version**: 1.0  
+**Last Updated**: 2025-12-09  
+**Status**: Phase 5 부분 완료  
+
+---
 
 ## 프로젝트 개요
 
-**프로젝트명**: KTB Community Platform
+**프로젝트명**: DC2(Developer Community Club) Community Platform  
 **기술 스택 및 아키텍처**: **@docs/be/LLD.md Section 1-2** 참조
 
 ---
 
 ## 현재 진행 상황
 
-**Phase 1 완료** ✅
-**Phase 2 완료** ✅ (Week 2-3)
-**Phase 3 완료** ✅ (Week 4-5)
-**Phase 3.5 완료** ✅ (S3 이미지 업로드)
-**Phase 3.6 완료** ✅ (회원가입/프로필 Multipart 전환 + P0/P1 수정)
+- **Phase 1 완료** ✅
+- **Phase 2 완료** ✅ (Week 2-3)
+- **Phase 3 완료** ✅ (Week 4-5)
+- **Phase 3.5 완료** ✅ (S3 이미지 업로드)
+- **Phase 3.5.1 완료** ✅ (Presigned URL 방식으로 변경)
+- **Phase 4 완료** ✅ (통계 및 배치)
 
 ---
 
 ## 전체 로드맵
 
-| Phase | Week | 목표 | FR 범위 | 상태 |
-|-------|------|------|---------|------|
-| Phase 1 | 1 | 기반 설정 | - | ✅ 완료 |
-| Phase 2 | 2-3 | 인증/사용자 | AUTH-001~004, USER-001~004 | ✅ 완료 |
-| Phase 3 | 4-5 | 게시글/댓글/좋아요 | POST-001~005, COMMENT-001~004, LIKE-001~003 | ✅ 완료 |
-| Phase 3.5 | 5 | 이미지 업로드 (S3) | IMAGE-001, IMAGE-003 | ✅ 완료 |
-| Phase 3.6 | 5 | Multipart 전환 + P0/P1 수정 | AUTH-001, USER-002 | ✅ 완료 |
-| Phase 4 | 6 | 통계 및 배치 | IMAGE-002 (고아 이미지) | ✅ 완료 |
-| Phase 5 | 7 | 테스트/문서 + 버그 수정 | detached entity 해결 | ⏳ 진행 예정 |
-| Phase 6 | 8+ | Redis 도입 (조건부) | 성능 최적화 | ⏸️ 조건 대기 |
+| Phase | Week | 목표 | FR 범위 | 상태      |
+|-------|------|------|---------|---------|
+| Phase 1 | 1 | 기반 설정 | - | ✅ 완료    |
+| Phase 2 | 2-3 | 인증/사용자 | AUTH-001~004, USER-001~004 | ✅ 완료    |
+| Phase 3 | 4-5 | 게시글/댓글/좋아요 | POST-001~005, COMMENT-001~004, LIKE-001~003 | ✅ 완료    |
+| Phase 3.5 | 5 | 이미지 업로드 (S3) | IMAGE-001, IMAGE-003 | ✅ 완료    |
+| Phase 3.6 | 5 | Multipart 전환 + P0/P1 수정 | AUTH-001, USER-002 | ✅ 완료    |
+| Phase 3.7 | - | Presigned URL 추가 | IMAGE-003 (하이브리드) | ✅ 완료    |
+| Phase 4 | 6 | 통계 및 배치 | IMAGE-002 (고아 이미지) | ✅ 완료    |
+| Phase 5 | 7 | 테스트/문서 + 버그 수정 | detached entity 해결 | 🔄 부분 완료 |
+| Phase 6 | 8+ | Redis 도입 (조건부) | 성능 최적화 | 프로젝트 종료 |
 
 ---
 
@@ -37,10 +50,10 @@
 **목표**: 개발 환경 구축 및 데이터베이스 스키마 구축
 
 **완료 항목:**
-- [x] Spring Boot 프로젝트 생성 (Java 24, Gradle)
+- [x] Spring Boot 프로젝트 생성
 - [x] MySQL 데이터베이스 설정
-- [x] JPA Entity 클래스 8개 (User, Post, Comment, PostLike, Image, UserToken, PostStats, PostImage)
-- [x] Enum 클래스 4개 (UserRole, UserStatus, PostStatus, CommentStatus)
+- [x] JPA Entity 클래스 8개
+- [x] Enum 클래스 4개
 - [x] 패키지 구조 설계
 
 **참조**: **@docs/be/LLD.md Section 3** (패키지 구조), **@docs/be/DDL.md** (스키마)
@@ -74,34 +87,21 @@
 
 **API 구현:**
 - [x] 인증 API 3개 (POST /auth/login, /auth/logout, /auth/refresh_token)
-- [x] 사용자 API 5개 (POST /users/signup, GET/PATCH /users/{id}, /users/{id}/password 등)
-- 상세 스펙: **@docs/be/API.md Section 1-2**
+- [x] 사용자 API 5개 (POST /users/signup, GET/PATCH /users/{id}, 비밀번호 변경 등)
 
 **비즈니스 로직:**
-- [x] 비밀번호 정책 검증: **@docs/be/LLD.md Section 6.4** (정규식 포함)
+- [x] 비밀번호 정책 검증 (8-20자, 대/소/특수문자)
 - [x] 이메일/닉네임 중복 확인
-- [x] Rate Limiting: **@docs/be/LLD.md Section 6.5** (3-Tier 전략, Bucket4j)
-
-**동시성 제어:**
-- [x] PostStatsRepository 원자적 UPDATE 메서드
-- [x] Service 계층 통합 (PostService, CommentService, LikeService)
-- **구현 상세**: **@docs/be/LLD.md Section 7.2, 12.3** (JPQL 코드 포함)
+- [x] Rate Limiting (3-Tier 전략)
 
 **테스트:**
-- [x] 단위 테스트 작성 (AuthService, UserService, JwtTokenProvider, RateLimitAspect)
-  - AuthServiceTest: 8/8 통과
-  - UserServiceTest: 7/7 통과
-  - JwtTokenProviderTest: 9/9 통과
-  - RateLimitAspectTest: 10/10 통과
-- [x] Service Layer 커버리지 100% (15/15 통과)
-- [x] Security Layer 테스트 (JwtTokenProvider 9/9 통과)
-- [x] Config Layer 테스트 (RateLimitAspect 10/10 통과)
-- [x] Repository Layer 테스트 (Phase 3에서 완료, H2 환경 12/12 통과)
+- [x] 단위 테스트 (AuthService, UserService, JwtTokenProvider, RateLimitAspect)
+- [x] 통합 테스트 (UserController)
 
 ### 완료 조건
 - [x] 회원가입 → 로그인 → 토큰 발급 → 인증 API 호출 플로우 작동
 - [x] 비밀번호 정책 검증 통과
-- [x] 모든 단위 테스트 통과 (Service Layer 15/15, Security Layer 9/9, Config Layer 10/10)
+- [x] 모든 테스트 통과
 
 **참조**: **@docs/be/LLD.md Section 6 (인증 및 보안), Section 7.2/12.3 (동시성 제어)**
 
@@ -124,7 +124,7 @@
 **게시글 기능:**
 - [x] PostService (CRUD, 페이지네이션, 정렬)
 - [x] 권한 검증 (작성자만 수정/삭제)
-- [x] 조회수 자동 증가 (PostStats, EntityManager.refresh 동기화)
+- [x] 조회수 자동 증가 (PostStats 동기화)
 - [x] API 6개 (POST/GET/PATCH/DELETE /posts)
 - [x] PostController 구현
 
@@ -142,24 +142,20 @@
 - [x] API 3개 (POST/DELETE /posts/{id}/like, GET /users/me/likes)
 
 **Repository 계층:**
-- [x] PostRepository (Fetch Join N+1 방지, JPQL 수정)
-- [x] CommentRepository (Fetch Join, JPQL 수정)
-- [x] PostLikeRepository (좋아요 목록, JPQL 수정)
-- [x] ImageRepository 생성 (프로필 이미지 연동)
+- [x] PostRepository (Fetch Join N+1 방지)
+- [x] CommentRepository (Fetch Join)
+- [x] PostLikeRepository (좋아요 목록)
+- [x] ImageRepository (프로필 이미지 연동)
 
 **테스트:**
-- [x] 단위 테스트 (Service Layer 30개, 100% 통과)
-  - PostServiceTest: 11/11 통과
-  - CommentServiceTest: 10/10 통과
-  - LikeServiceTest: 9/9 통과
-- [x] Repository 테스트 (12/12 통과, H2 환경)
+- [x] 단위 테스트 (PostService, CommentService, LikeService)
+- [x] Repository 테스트 (H2 환경)
 - [x] N+1 문제 검증 (Fetch Join)
-- [x] 전체 테스트: 98/98 통과 (100%)
 
 ### 완료 조건
 - [x] 게시글/댓글/좋아요 전체 플로우 작동
 - [x] 권한 검증 정상 작동
-- [x] 모든 단위 테스트 통과
+- [x] 모든 테스트 통과
 
 **참조**: **@docs/be/LLD.md Section 7 (비즈니스 로직), Section 12 (성능 최적화)**
 
@@ -199,7 +195,7 @@
 - [x] POST /images API 작동 (multipart/form-data)
 - [x] S3 업로드 및 DB 저장 확인
 - [x] 게시글/프로필 이미지 연결 작동
-- [x] 모든 단위 테스트 통과
+- [x] 모든 테스트 통과
 
 **참조**: **@docs/be/LLD.md Section 7.5** (이미지 업로드 흐름), **@docs/be/API.md Section 4.1**
 
@@ -218,12 +214,6 @@
 
 ### 체크리스트
 
-**문서 업데이트:**
-- [x] PLAN.md (Phase 3.5 완료, Phase 3.6 추가)
-- [x] PRD.md (FR-AUTH-001, FR-USER-002)
-- [x] API.md (Section 2.1, 2.3)
-- [x] LLD.md (Section 7.5 - 2가지 업로드 패턴)
-
 **DTO 수정:**
 - [x] SignupRequest - profileImageId 제거
 - [x] UpdateProfileRequest - profileImageId 제거
@@ -239,24 +229,58 @@
 **테스트 수정:**
 - [x] AuthServiceTest - MultipartFile null 처리
 - [x] UserServiceTest - MultipartFile null 처리
-- [x] UserControllerIntegrationTest - Manual Validation 검증 (P0/P1)
+- [x] UserControllerIntegrationTest - Manual Validation 검증
 
-**P0/P1 수정:**
+**P0/P1 수정 (중요 버그 수정):**
 - [x] P0: @RequestPart Manual Validation 복원 (40자 닉네임 → 400 에러)
 - [x] P1: PasswordValidator 사용으로 ErrorCode 일관성 복원 (USER-004)
 
 ### 완료 조건
 - [x] Multipart 회원가입/프로필 수정 작동
 - [x] Manual Validation으로 입력 검증 (Bean Validation 대체)
-- [x] 모든 단위 테스트 통과 (102 tests, 0 failures, 100% success)
+- [x] 모든 테스트 통과
 
 **참조**: **@docs/be/LLD.md Section 7.5** (2가지 업로드 패턴), **@docs/be/API.md Section 2.1, 2.3**
 
 ---
 
-## Phase 4: 통계 및 배치 작업
+## Phase 3.7: S3 Presigned URL 이미지 업로드 ✅ 완료
 
-**목표**: 게시글 통계 활용 및 고아 이미지 정리 배치 구현
+**목표**: 클라이언트 직접 S3 업로드로 서버 부하 감소
+
+### FR 매핑
+
+| FR 코드 | 기능 | 변경 내용                                     |
+|---------|------|-------------------------------------------|
+| FR-IMAGE-003 | 이미지 업로드 | Multipart 유지 + Presigned URL 추가( 추후 완전변경) |
+
+### 체크리스트
+
+**구현:**
+- [x] S3Config.java - S3Presigner Bean 추가
+- [x] PresignedUrlResponse.java - 응답 DTO 생성
+- [x] ImageService.generatePresignedUrl() - 메서드 구현
+- [x] ImageController.getPresignedUrl() - 엔드포인트 추가
+- [x] JwtAuthenticationFilter - /images/presigned-url 인증 필수
+
+**테스트:**
+- [x] ImageService 단위 테스트 (generatePresignedUrl, 7개 테스트 케이스)
+- [x] 확장자 검증 테스트 (.jpg, .jpeg, .png, .gif)
+- [x] Rate Limit 테스트 (10회/분)
+
+### 완료 조건
+- [x] GET /images/presigned-url API 작동
+- [x] 클라이언트 S3 직접 업로드 성공
+- [x] 기존 POST /images API 정상 작동 (하위 호환성)
+- [x] 모든 테스트 통과
+
+**참조**: **@docs/be/LLD.md Section 7.5** (패턴 4), **@docs/be/API.md Section 4.3**
+
+---
+
+## Phase 4: 통계 및 배치 작업 ✅ 완료
+
+**목표**: 게시글 통계 활용, 고아 이미지 정리 배치, CI/CD 파이프라인 구축
 
 ### 체크리스트
 
@@ -264,13 +288,20 @@
 - [x] PostStats 자동 업데이트 검증 (Phase 3에서 구현됨)
 - [x] 통계 기반 정렬 구현 (인기순: like_count DESC)
 - [x] 통계 조회 최적화 (N+1 방지)
+- [x] /stats API 구현 (랜딩페이지용 플랫폼 통계)
 
 **고아 이미지 배치:**
 - [x] 배치 작업 스케줄러 (@Scheduled)
 - [x] expires_at < NOW() 조건 이미지 조회
-- [x] S3 파일 삭제
+- [x] S3 파일 삭제 (⚠️ 버그 있음 - Phase 5에서 수정 예정)
 - [x] DB 레코드 삭제
 - [x] 배치 로그 기록
+
+**CI/CD 인프라:**
+- [x] GitHub Actions 워크플로우 (.github/workflows/cd.yml)
+- [x] Jenkins 파이프라인 (Jenkinsfile.backend)
+- [x] AWS ECR 설정 (OIDC 인증)
+- [x] ALB 경로 기반 라우팅 (/api/v1/* → Backend)
 
 **테스트:**
 - [x] 통계 정렬 테스트 (Phase 3에서 완료)
@@ -278,10 +309,15 @@
 - [x] TTL 만료 시나리오 검증
 
 ### 완료 조건
-- 고아 이미지 배치 작업 스케줄 실행
-- 배치 로그 확인
+- [x] 고아 이미지 배치 작업 스케줄 실행
+- [x] 배치 로그 확인
+- [x] CI/CD 파이프라인 프로덕션 배포 검증
+- [x] /stats API 작동 확인
 
-**참조**: **@docs/be/LLD.md Section 7.5** (고아 이미지 처리)
+**참조**:
+- **@docs/be/LLD.md Section 7.5** (고아 이미지 처리)
+- **@docs/deployment/CI-CD.md** (GitHub Actions + Jenkins 파이프라인)
+- **@docs/be/LLD.md Section 2.1-2.2** (ALB 경로 기반 라우팅)
 
 ---
 
@@ -291,44 +327,39 @@
 
 ### 체크리스트
 
-**Phase 4 버그 수정:**
+**Phase 4 버그 수정 (중요 트러블슈팅):**
 - [x] PostService detached entity 문제 해결
-  - 해결: `clearAutomatically = false` 적용 (PostStatsRepository 5개 메서드)
-  - 부가효과: Optimistic Update 패턴 도입으로 DB 통신 17% 감소
-  - 영향: PostService.getPostDetail(), LikeService (2개 메서드), PostController (2개 메서드)
-  - 변경 파일: 9개 (Backend 5개, Frontend 1개, Docs 2개, Test 1개)
-  - 상세: 이 대화 스레드 "Optimistic Update 패턴 도입" 참조
+  - 해결책: `clearAutomatically = false` 적용
+  - 부가효과: Optimistic Update 패턴 도입 (DB 통신 17% 감소)
 
 **Optimistic Update 패턴:**
-- [x] 좋아요 API 응답 간소화 (like_count 제거)
-- [x] 클라이언트 UI 즉시 업데이트 + 에러 시 Rollback
-- [x] 원자적 쿼리 유지 (100% 데이터 정확도)
-- [x] DB 통신: 6번 → 5번 (17% 성능 개선)
-
+- [x] 좋아요 API 응답 간소화
+- [x] 클라이언트 UI 즉시 업데이트
+- [x] 원자적 쿼리 유지
 
 **페이지네이션:**
-- [x] Cursor 페이지네이션 전환 (최신순만, 하이브리드 방식)
-  - Repository: findByStatusWithCursor, findByStatusWithoutCursor 추가
-  - Service: getPosts 시그니처 변경 (cursor, offset 파라미터)
-  - Controller: cursor/offset 파라미터 추가
-  - 응답 구조: latest (cursor/hasMore), likes (offset/total_count)
-- [ ] Cursor 페이지네이션 확장 (likes 정렬, 추후 작업)
-- [ ] GET /posts/users/me/likes cursor 전환 (추후 작업)
+- [x] Cursor 페이지네이션 전환 (최신순만)
+- [ ] Cursor 페이지네이션 확장 (likes 정렬, 미완료)
+- [ ] GET /posts/users/me/likes cursor 전환 (미완료)
 
-**테스트:**
-- [ ] 전체 Service Layer 테스트 (커버리지 80%+)
-- [ ] Repository Layer 테스트 (커버리지 60%+)
+**미완료 항목 (프로젝트 종료):**
+
+*테스트:*
+- [ ] 전체 Service Layer 테스트 (현재 진행률: ~40%)
+- [ ] Repository Layer 테스트 (현재 진행률: ~20%)
 - [ ] 통합 테스트 주요 플로우
 
-**문서화:**
+*문서화:*
 - [ ] @docs/be/API.md 최종 검토
 - [ ] Postman Collection 작성
 - [ ] README 업데이트
 
-**코드 품질:**
+*코드 품질:*
 - [ ] 코드 리뷰 및 리팩토링
 - [ ] 네이밍 컨벤션 통일
 - [ ] 불필요한 주석 제거
+
+**종료 사유**: 핵심 비즈니스 로직 구현 완료, 추가 테스트는 향후 과제로 이관
 
 ### 완료 조건
 - 전체 테스트 커버리지 60% 이상
@@ -353,13 +384,11 @@
 
 ## 제약사항 (설계 배경)
 
-**기술 제약**: 토큰 RDB 저장 → Redis 전환, S3 직접 저장
-**성능 가정**: 초기 트래픽 낮음, 단일 서버, 원자적 UPDATE
+**기술 제약**: 토큰 RDB 저장 → Redis 전환, S3 직접 저장  
+**성능 가정**: 초기 트래픽 낮음, 단일 서버, 원자적 UPDATE  
 **데이터 정책**: Soft Delete (User/Post/Comment), Hard Delete (UserToken/Image)
 
 **상세**: **@docs/be/PRD.md Section 5**, **@docs/be/LLD.md Section 7.5, 12.3**
-
----
 
 ---
 

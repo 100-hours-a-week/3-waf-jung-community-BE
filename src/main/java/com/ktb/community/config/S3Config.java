@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Configuration
 public class S3Config {
@@ -32,6 +33,23 @@ public class S3Config {
     @Bean
     public S3Client s3Client() {
         return S3Client.builder()
+                .region(Region.of(region))
+                .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
+                .build();
+    }
+
+
+    /**
+     * S3Presigner Bean 생성 (Presigned URL 발급용)
+     *
+     * Presigned URL 특성:
+     * - 임시 URL로 클라이언트가 S3에 직접 업로드 가능
+     * - 서버를 거치지 않아 대용량 파일 업로드에 효율적
+     * - URL 유효기간(15분) 내에만 업로드 가능
+     */
+    @Bean
+    public S3Presigner s3Presigner() {
+        return S3Presigner.builder()
                 .region(Region.of(region))
                 .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
                 .build();

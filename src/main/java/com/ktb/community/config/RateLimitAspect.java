@@ -34,7 +34,10 @@ import java.util.concurrent.TimeUnit;
 @Aspect
 @Component
 public class RateLimitAspect {
-    
+
+    // 부하테스트용 Rate Limit 비활성화 (테스트 후 true로 복원 필요)
+    private boolean rateLimitEnabled = false;
+
     /**
      * 클라이언트별 Bucket 캐시 (Caffeine)
      * - 자동 만료: 10분 미사용 시 삭제
@@ -57,6 +60,11 @@ public class RateLimitAspect {
      */
     @Around("@annotation(rateLimit)")
     public Object rateLimit(ProceedingJoinPoint pjp, RateLimit rateLimit) throws Throwable {
+        // 환경변수로 Rate Limit 비활성화 가능
+        if (!rateLimitEnabled) {
+            return pjp.proceed();
+        }
+
         String clientKey = getClientKey(pjp);
         int requestsPerMinute = rateLimit.requestsPerMinute();
         

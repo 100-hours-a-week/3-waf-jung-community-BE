@@ -13,19 +13,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
- * [세션 전환]
- * 현재는 세션 기반 인증(SessionAuthenticationFilter)을 사용하므로 이 클래스는 실행되지 않습니다.
- * JWT 인프라는 향후 토큰 기반 인증으로 전환 시 재사용을 위해 보존되었습니다.
- * 
- * 관련 파일:
- * - SessionAuthenticationFilter: 세션 쿠키 검증 및 인증 처리
- * - SessionManager: 세션 생성/조회/삭제
- * - InMemorySessionStore: 세션 저장소 (ConcurrentHashMap)
- */
-
-/**
- * JWT 토큰 생성 및 검증을 담당하는 Provider
- * LLD.md Section 6.1-6.2 참조
+ * JWT 토큰 생성 및 검증을 담당하는 핵심 컴포넌트.
+ *
+ * 토큰 타입:
+ * - Access Token (15분): API 인증용, Authorization 헤더로 전달
+ * - Refresh Token (7일): AT 갱신용, httpOnly Cookie로 전달, DB 저장
+ * - Guest Token (5분): 회원가입 이미지 업로드용, 일회성
+ *
+ * @see LLD.md Section 6.1-6.2
  */
 @Slf4j
 @Component
@@ -45,11 +40,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Access Token 생성 (30분)
-     * @param userId 사용자 ID
-     * @param email 사용자 이메일
-     * @param role 사용자 권한
-     * @return JWT Access Token
+     * Access Token 생성 (15분)
      */
     public String createAccessToken(Long userId, String email, String role) {
         Date now = new Date();
@@ -67,8 +58,6 @@ public class JwtTokenProvider {
 
     /**
      * Refresh Token 생성 (7일)
-     * @param userId 사용자 ID
-     * @return JWT Refresh Token
      */
     public String createRefreshToken(Long userId) {
         Date now = new Date();
@@ -76,6 +65,24 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(String.valueOf(userId))
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(secretKey)
+                .compact();
+    }
+
+    /**
+     * Guest Token 생성 (5분, 회원가입 이미지 업로드용)
+     * - subject: "0" (게스트 전용 ID)
+     * - role: GUEST, DB 저장 없음
+     */
+    public String generateGuestToken() {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + 300000L); // 5분
+
+        return Jwts.builder()
+                .subject("0")  // 게스트 전용 ID (Long 파싱 가능)
+                .claim("role", "GUEST")
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)
@@ -110,8 +117,6 @@ public class JwtTokenProvider {
 
     /**
      * JWT 토큰 유효성 검증
-     * @param token JWT 토큰
-     * @return 유효하면 true, 그렇지 않으면 false
      */
     public boolean validateToken(String token) {
         try {

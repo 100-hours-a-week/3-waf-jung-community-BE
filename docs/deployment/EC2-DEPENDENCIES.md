@@ -2,9 +2,17 @@
 
 ## 개요
 
-KTB Community Spring Boot 백엔드를 AWS EC2(Amazon Linux 2 또는 Ubuntu)에 배포하기 위한 완전한 의존성 목록입니다.
+KTB Community Spring Boot 백엔드를 AWS EC2에 **수동으로 배포**하기 위한 완전한 의존성 목록입니다.
 
-**프로젝트 기술 스택:**
+**CI/CD 자동 배포는** `CI-CD.md`를 참조하세요.
+
+---
+
+## 기술 스택 (공통 정보)
+
+**@docs/deployment/README.md Section "기술 스택 및 버전 정보" 참조**
+
+**주요 컴포넌트:**
 - Java 21 JDK (Spring Boot 3.5.6)
 - MySQL 8.0+ (RDS 또는 로컬 설치)
 - Gradle 8.14.3 (Gradle Wrapper 포함)
@@ -220,6 +228,142 @@ sudo apt install -y \
 
 apt list --installed | grep gcc
 ```
+
+---
+
+## 5. 빠른 배포 팁
+
+### 자동화 스크립트 작성
+
+위의 Step 1-4를 bash 스크립트로 작성하여 자동화할 수 있습니다.
+
+**예시 스크립트:**
+```bash
+#!/bin/bash
+set -e
+
+echo "=== EC2 배포 자동화 스크립트 ==="
+
+# 1. 시스템 업데이트 및 도구 설치
+sudo yum update -y
+sudo yum install -y java-21-amazon-corretto-devel git mysql-server curl
+
+# 2. MySQL 시작
+sudo systemctl start mysqld
+sudo systemctl enable mysqld
+
+# 3. 프로젝트 클론 및 빌드
+GIT_REPO="https://github.com/<your-org>/community.git"
+git clone $GIT_REPO
+cd community
+
+# 4. 환경 변수 설정 (.env 파일 생성)
+cat > .env << 'EOF'
+DB_URL=jdbc:mysql://localhost:3306/community
+DB_USERNAME=root
+DB_PASSWORD=your_password
+JWT_SECRET=your_256bit_secret_key
+AWS_S3_BUCKET=ktb-3-community-images
+AWS_REGION=ap-northeast-2
+FRONTEND_URL=http://localhost:3000
+EOF
+
+chmod 600 .env
+
+# 5. 빌드 및 실행
+./gradlew bootJar
+java -Xmx512m -Xms256m -jar build/libs/community-0.0.1-SNAPSHOT.jar
+```
+
+**사용 방법:**
+```bash
+# 1. 스크립트 작성
+vim deploy.sh
+# (위 내용 붙여넣기)
+
+# 2. 실행 권한 부여
+chmod +x deploy.sh
+
+# 3. 실행
+./deploy.sh
+```
+
+**참고:**
+- 실제 배포 시 `GIT_REPO`, `DB_PASSWORD`, `JWT_SECRET` 등을 실제 값으로 변경하세요
+- systemd 서비스로 등록하려면 아래 "선택적 의존성" 섹션 참조
+
+---
+
+## 환경 변수 설정 (상세 가이드)
+
+**7개 필수 변수 개요**: @docs/deployment/README.md Section "필수 환경 변수" 참조
+
+**이 섹션의 내용**: 상세 설정 방법 3가지 (`.env`, `systemd`, `AWS SSM`)
+
+### 방법 1: .env 파일 (spring-dotenv)
+
+```bash
+# .env 파일 생성
+cat > .env << 'EOF'
+DB_URL=jdbc:mysql://localhost:3306/community
+DB_USERNAME=root
+DB_PASSWORD=your_password
+JWT_SECRET=$(openssl rand -base64 32)
+AWS_S3_BUCKET=ktb-3-community-images
+AWS_REGION=ap-northeast-2
+FRONTEND_URL=http://localhost:3000
+EOF
+
+# 권한 설정 (보안)
+chmod 600 .env
+```
+
+**장점**: 간단하고 로컬 개발에 적합
+**주의**: `.env` 파일을 Git에 커밋하지 마세요 (`.gitignore`에 추가)
+
+### 방법 2: systemd EnvironmentFile
+
+**서비스 파일**: `/etc/systemd/system/community.service`
+
+```ini
+[Unit]
+Description=KTB Community Backend
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/opt/community
+EnvironmentFile=/opt/community/.env
+ExecStart=/usr/bin/java -jar /opt/community/community.jar
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**장점**: 프로덕션 환경, 자동 재시작
+**설정**: `sudo systemctl daemon-reload && sudo systemctl enable community`
+
+### 방법 3: AWS SSM Parameter Store (CI/CD)
+
+**파라미터 생성**:
+```bash
+aws ssm put-parameter \
+  --name "/community/DB_URL" \
+  --value "jdbc:mysql://your-rds-endpoint:3306/community" \
+  --type "String"
+
+aws ssm put-parameter \
+  --name "/community/DB_PASSWORD" \
+  --value "your_password" \
+  --type "SecureString"  # 암호화됨
+
+# 나머지 파라미터도 동일하게 생성
+```
+
+**장점**: 중앙 관리, 버전 관리, 암호화, IAM 권한 제어
+**사용처**: CI/CD 파이프라인 (Jenkins, GitHub Actions)
 
 ---
 
@@ -528,7 +672,7 @@ sudo systemctl enable mysqld
 mysql -u root -p  # 연결 테스트
 ```
 
-### Step 4: 프로젝트 클론 및 빌드 (10-20분)
+### Step 4: 프로젝트 클론 및 빌드 (5-10분)
 ```bash
 cd /opt
 sudo git clone https://github.com/<your-repo>/community.git

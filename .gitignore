@@ -43,9 +43,7 @@ out/
 ### AI AGENET ###
 .serena/
 .claude/
-CLAUDE.md
 AGENTS.md
-.mcp.json
 docs/backup/
 docs/legacy/
 # Environment variables
@@ -55,5 +53,21 @@ docs/legacy/
 scripts/check_password.sql
 
 # Application logs
+legacy/
 logs/
 *.log
+
+# Terraform
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+infra/terraform/**/.terraform/
+infra/terraform/**/terraform.tfvars
+infra/terraform/**/.terraform.lock.hcl
+infra/terraform/**/*.tfplan
+infra/terraform/**/tfplan
+
+# Packer
+infra/packer/packer_cache/
+
+# K6 results
+results/

@@ -1,0 +1,178 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'ap-northeast-2'
+        REGISTRY   = '557690602093.dkr.ecr.ap-northeast-2.amazonaws.com'
+        IMAGE_NAME = 'ktb-personal'
+
+        BE_TG_ARN  = 'arn:aws:elasticloadbalancing:ap-northeast-2:557690602093:targetgroup/ktb-persoanl-project-be/73713cba8e97578c'
+    }
+
+    parameters {
+        string(
+            name: 'IMAGE_DATE_TAG',
+            defaultValue: '',
+            description: 'GitHub Actions가 찍어준 be- 뒤 timestamp (예: 20251207-200805)'
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Resolve Backend Targets') {
+            steps {
+                script {
+                    // 1) 타겟그룹에서 인스턴스 ID 가져오기
+                    def instanceIds = sh(
+                        script: """
+                          aws elbv2 describe-target-health \\
+                            --region ${AWS_REGION} \\
+                            --target-group-arn ${BE_TG_ARN} \\
+                            --query 'TargetHealthDescriptions[].Target.Id' \\
+                            --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    if (!instanceIds) {
+                        error "백엔드 타겟그룹에 등록된 인스턴스가 없습니다."
+                    }
+
+                    // 2) 인스턴스 IP로 변환
+                    def ipsText = sh(
+                        script: """
+                          aws ec2 describe-instances \\
+                            --region ${AWS_REGION} \\
+                            --instance-ids ${instanceIds} \\
+                            --query 'Reservations[].Instances[].PrivateIpAddress' \\
+                            --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    ipsText = ipsText.replaceAll('\\s+', ' ')
+                    env.BACKEND_IPS = ipsText
+                    echo "백엔드 대상 IP들: ${env.BACKEND_IPS}"
+                }
+            }
+        }
+
+        stage('Load Backend Env From SSM') {
+            steps {
+                script {
+                    // /community/week10/... 아래에 있는 DB 관련 파라미터들 + 공용 값들
+                    def output = sh(
+                        script: """
+                          aws ssm get-parameters \\
+                            --names \\
+                              "/community/week10/DB_URL" \\
+                              "/community/week10/DB_USERNAME" \\
+                              "/community/week10/DB_PASSWORD" \\
+                              "/community/JWT_SECRET" \\
+                              "/community/AWS_S3_BUCKET" \\
+                              "/community/AWS_REGION" \\
+                              "/community/FRONTEND_URL" \\
+                            --with-decryption \\
+                            --query "Parameters[].[Name,Value]" \\
+                            --output text \\
+                            --region ${AWS_REGION} \\
+                            --no-cli-pager
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    echo "SSM raw output (backend):\n${output}"
+
+                    def m = [:]
+
+                    output.split("\\n").each { line ->
+                        def parts = line.split("\\t", 2)   // Name \t Value
+                        if (parts.size() == 2) {
+                            def name  = parts[0]
+                            def value = parts[1]
+                            switch (name) {
+                                case '/community/week10/DB_URL':
+                                    m.DB_URL = value; break
+                                case '/community/week10/DB_USERNAME':
+                                    m.DB_USERNAME = value; break
+                                case '/community/week10/DB_PASSWORD':
+                                    m.DB_PASSWORD = value; break
+                                case '/community/JWT_SECRET':
+                                    m.JWT_SECRET = value; break
+                                case '/community/AWS_S3_BUCKET':
+                                    m.AWS_S3_BUCKET = value; break
+                                case '/community/AWS_REGION':
+                                    m.AWS_REGION = value; break
+                                case '/community/FRONTEND_URL':
+                                    m.FRONTEND_URL = value; break
+                            }
+                        }
+                    }
+
+                    if (!m.DB_URL || !m.DB_USERNAME || !m.DB_PASSWORD ||
+                        !m.JWT_SECRET || !m.AWS_S3_BUCKET || !m.AWS_REGION || !m.FRONTEND_URL) {
+                        error "SSM에서 필요한 백엔드 파라미터를 모두 가져오지 못했습니다. 현재 값: ${m}"
+                    }
+
+                    // 이후 Stage에서 쓰기 쉽게 env로 저장
+                    env.BE_DB_URL        = m.DB_URL
+                    env.BE_DB_USERNAME   = m.DB_USERNAME
+                    env.BE_DB_PASSWORD   = m.DB_PASSWORD
+                    env.BE_JWT_SECRET    = m.JWT_SECRET
+                    env.BE_AWS_S3_BUCKET = m.AWS_S3_BUCKET
+                    env.BE_AWS_REGION    = m.AWS_REGION
+                    env.BE_FRONTEND_URL  = m.FRONTEND_URL
+
+                    echo "BE_DB_URL=${env.BE_DB_URL}"
+                    echo "BE_DB_USERNAME=${env.BE_DB_USERNAME}"
+                    echo "BE_AWS_REGION=${env.BE_AWS_REGION}"
+                }
+            }
+        }
+
+        stage('Deploy Backend') {
+            steps {
+                sshagent(credentials: ['ktb-personal-project-ec2-ssh-key']) {
+                    script {
+                        def ipsText = env.BACKEND_IPS?.trim()
+                        if (!ipsText) {
+                            error "백엔드 IP가 없습니다."
+                        }
+
+                        def ips = (ipsText.split(' ') as List<String>)
+                        echo "백엔드 대상 IP들(배포용): ${ips}"
+
+                        def finalTag = "be-${params.IMAGE_DATE_TAG}".trim()
+                        echo "백엔드 배포 태그: ${finalTag}"
+
+                        echo "사용할 DB_URL=${env.BE_DB_URL}"
+                        echo "사용할 FRONTEND_URL=${env.BE_FRONTEND_URL}"
+
+                        ips.each { ip ->
+                            echo "백엔드 배포 대상: ${ip}"
+                            sh """
+                              ssh -o StrictHostKeyChecking=no ubuntu@${ip} \\
+                                'DB_URL="${env.BE_DB_URL}" \\
+                                 DB_USERNAME="${env.BE_DB_USERNAME}" \\
+                                 DB_PASSWORD="${env.BE_DB_PASSWORD}" \\
+                                 JWT_SECRET="${env.BE_JWT_SECRET}" \\
+                                 AWS_S3_BUCKET="${env.BE_AWS_S3_BUCKET}" \\
+                                 AWS_REGION="${env.BE_AWS_REGION}" \\
+                                 FRONTEND_URL="${env.BE_FRONTEND_URL}" \\
+                                 REGISTRY="${REGISTRY}" \\
+                                 IMAGE_NAME="${IMAGE_NAME}" \\
+                                 IMAGE_TAG="${finalTag}" \\
+                                 /mnt/efs/deploy/backend/deploy-backend.sh'
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 이미지 파일 검증 유틸리티
@@ -93,5 +94,59 @@ public class FileValidator {
             }
         }
         return true;
+    }
+
+
+    // 허용 확장자 (Presigned URL 발급용)
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif"
+    );
+
+    /**
+     * 파일 확장자 검증 (Presigned URL 발급용)
+     * - 실제 파일 없이 filename만으로 확장자 유효성 검증
+     *
+     * @param filename 원본 파일명
+     * @throws BusinessException 허용되지 않은 확장자
+     */
+    public static void validateExtension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "Filename is required");
+        }
+
+        String extension = extractExtension(filename);
+        if (extension.isEmpty() || !ALLOWED_EXTENSIONS.contains(extension.toLowerCase())) {
+            throw new BusinessException(ErrorCode.INVALID_FILE_TYPE,
+                "Allowed extensions: " + ALLOWED_EXTENSIONS);
+        }
+    }
+
+    /**
+     * 파일 확장자 추출 (점 포함)
+     *
+     * @param filename 파일명
+     * @return 확장자 (예: ".jpg", ".png")
+     */
+    private static String extractExtension(String filename) {
+        if (filename == null || !filename.contains(".")) {
+            return "";
+        }
+        return filename.substring(filename.lastIndexOf("."));
+    }
+
+    /**
+     * 확장자 기반 Content-Type 추론
+     *
+     * @param filename 파일명
+     * @return Content-Type (예: "image/jpeg")
+     */
+    public static String inferContentType(String filename) {
+        String extension = extractExtension(filename).toLowerCase();
+        return switch (extension) {
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".png" -> "image/png";
+            case ".gif" -> "image/gif";
+            default -> "application/octet-stream";
+        };
     }
 }

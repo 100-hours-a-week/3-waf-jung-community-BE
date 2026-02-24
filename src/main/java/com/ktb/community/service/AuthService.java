@@ -11,8 +11,6 @@ import com.ktb.community.repository.ImageRepository;
 import com.ktb.community.repository.UserRepository;
 import com.ktb.community.repository.UserTokenRepository;
 import com.ktb.community.security.JwtTokenProvider;
-// [JWT 전환] 세션 방식 (보존)
-// import com.ktb.community.session.SessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -48,14 +46,11 @@ public class AuthService {
     private final ImageService imageService;
     private final ImageRepository imageRepository;
 
-    // [JWT 전환] 세션 방식 (보존)
-    // private final SessionManager sessionManager;
-    
     /**
      * 회원가입 (FR-AUTH-001)
      * - 이메일/닉네임 중복 확인
      * - 비밀번호 정책 검증
-     * - 프로필 이미지 업로드 (Multipart)
+     * - 프로필 이미지 참조 (2단계 업로드)
      * - 자동 로그인 (토큰 발급)
      */
     @Transactional
@@ -75,14 +70,14 @@ public class AuthService {
         // 비밀번호 암호화
         String encodedPassword = passwordEncoder.encode(request.getPassword());
 
-        // 프로필 이미지 업로드 (있을 경우)
+        // 프로필 이미지 참조 (있을 경우)
         com.ktb.community.entity.Image image = null;
-        if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
-            com.ktb.community.dto.response.ImageResponse imageResponse = imageService.uploadImage(request.getProfileImage());
-            image = imageRepository.findById(imageResponse.getImageId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
-            image.clearExpiresAt();  // 영구 보존
-            log.debug("[Auth] 회원가입 프로필 이미지 업로드: imageId={}", image.getImageId());
+        if (request.getImageId() != null) {
+            image = imageRepository.findById(request.getImageId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND,
+                            "Invalid or expired image ID: " + request.getImageId()));
+            image.clearExpiresAt();  // TTL 해제 → 영구 보존
+            log.debug("[Auth] 회원가입 프로필 이미지 연결: imageId={}", image.getImageId());
         }
 
         // 사용자 생성
@@ -92,19 +87,11 @@ public class AuthService {
         }
         User savedUser = userRepository.save(user);
 
-        // [세션 방식] (보존)
-        // String sessionId = sessionManager.createSession(
-        //         savedUser.getUserId(),
-        //         savedUser.getEmail(),
-        //         savedUser.getRole().name()
-        // );
-        // return new AuthResult(sessionId, savedUser);
-
         // [JWT 방식]
         TokenPair tokens = generateTokens(savedUser);
         return new AuthResult(tokens.accessToken(), tokens.refreshToken(), savedUser);
     }
-    
+
     /**
      * 로그인 (FR-AUTH-002)
      * - 이메일/비밀번호 검증
@@ -125,33 +112,21 @@ public class AuthService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
-        // [세션 방식] (보존)
-        // String sessionId = sessionManager.createSession(
-        //         user.getUserId(),
-        //         user.getEmail(),
-        //         user.getRole().name()
-        // );
-        // return new AuthResult(sessionId, user);
-
         // [JWT 방식]
         TokenPair tokens = generateTokens(user);
         return new AuthResult(tokens.accessToken(), tokens.refreshToken(), user);
     }
-    
+
     /**
      * 로그아웃 (FR-AUTH-003)
      * - Refresh Token 삭제
      */
     @Transactional
     public void logout(String refreshToken) {
-        // [세션 방식] (보존)
-        // sessionManager.deleteSession(sessionId);
-
-        // [JWT 방식] RT 삭제
         userTokenRepository.deleteByToken(refreshToken);
         log.info("[Auth] 로그아웃 완료");
     }
-    
+
     /**
      * Access Token 재발급 (FR-AUTH-004)
      * - Refresh Token 유효성 검증
@@ -190,7 +165,6 @@ public class AuthService {
 
     /**
      * 토큰 생성 및 저장 (내부 메서드)
-     * @return TokenPair (Controller에서 Cookie 설정용)
      */
     private TokenPair generateTokens(User user) {
         // AT/RT 생성
@@ -211,5 +185,14 @@ public class AuthService {
 
         log.debug("[Auth] JWT 토큰 생성: userId={}", user.getUserId());
         return new TokenPair(accessToken, refreshToken);
+    }
+
+    /**
+     * Guest Token 발급 (회원가입 이미지 업로드용, 5분)
+     */
+    public String generateGuestToken() {
+        String guestToken = jwtTokenProvider.generateGuestToken();
+        log.debug("[Auth] Guest Token 생성: role=GUEST, validity=5분");
+        return guestToken;
     }
 }

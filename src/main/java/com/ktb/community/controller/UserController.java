@@ -24,7 +24,6 @@ import org.springframework.http.ResponseEntity;
 // import org.springframework.security.core.Authentication;
 // import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.bind.annotation.ModelAttribute;
 
 /**
  * 사용자 컨트롤러
@@ -42,14 +41,14 @@ public class UserController {
     /**
      * 회원가입 (API.md Section 2.1)
      * POST /users/signup or POST /users
-     * Multipart 방식: 이미지와 데이터 함께 전송
+     * JSON 방식: 2단계 업로드 (POST /images → POST /users/signup)
      * httpOnly Cookie 방식으로 토큰 전달 (자동 로그인)
      * Tier 2: 중간 제한 (spam bot 방지, 정상 사용자 재시도 고려)
      */
-    @PostMapping(value = {"/signup", ""}, consumes = "multipart/form-data")
+    @PostMapping(value = {"/signup", ""})
     @RateLimit(requestsPerMinute = 10)
     public ResponseEntity<ApiResponse<AuthResponse>> signup(
-            @Valid @ModelAttribute SignupRequest request,
+            @Valid @RequestBody SignupRequest request,
             HttpServletResponse response) {
 
         // 비밀번호 정책 검증 (Bean Validation 외 추가 정책)
@@ -87,14 +86,14 @@ public class UserController {
     /**
      * 사용자 정보 수정 (API.md Section 2.3)
      * PATCH /users/{userID}
-     * Multipart 방식: 이미지와 데이터 함께 전송
+     * JSON 방식: 2단계 업로드 (POST /images → PATCH /users/{userId})
      * Tier 2: 중간 제한 (프로필 수정 spam 방지)
      */
-    @PatchMapping(value = "/{userId}", consumes = "multipart/form-data")
+    @PatchMapping("/{userId}")
     @RateLimit(requestsPerMinute = 30)
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @PathVariable Long userId,
-            @Valid @ModelAttribute UpdateProfileRequest request,
+            @Valid @RequestBody UpdateProfileRequest request,
             HttpServletRequest httpRequest) {
         
         Long authenticatedUserId = (Long) httpRequest.getAttribute("userId");

@@ -11,7 +11,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 회원가입 요청 DTO
@@ -23,20 +22,23 @@ import org.springframework.web.multipart.MultipartFile;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SignupRequest {
-    
+
     @NotBlank(message = "이메일은 필수입니다")
     @Email(message = "유효한 이메일 형식이어야 합니다")
     private String email;
-    
+
     @NotBlank(message = "비밀번호는 필수입니다")
     @Size(min = 8, max = 20, message = "비밀번호는 8-20자여야 합니다")
     private String password;
-    
+
     @NotBlank(message = "닉네임은 필수입니다")
     @Size(max = 10, message = "닉네임은 최대 10자입니다")
     private String nickname;
-    
-    private MultipartFile profileImage;
+
+    /**
+     * 선택: 프로필 이미지 ID (POST /images로 먼저 업로드 필요)
+     */
+    private Long imageId;
 
     /**
      * DTO → Entity 변환

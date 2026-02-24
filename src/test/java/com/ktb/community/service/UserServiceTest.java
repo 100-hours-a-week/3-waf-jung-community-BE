@@ -263,29 +263,16 @@ class UserServiceTest {
                 .build();
         ReflectionTestUtils.setField(newImage, "imageId", newImageId);
 
-        // Request (닉네임 + 프로필 이미지)
-        MultipartFile profileImage = new MockMultipartFile(
-                "profileImage",
-                "new-profile.jpg",
-                "image/jpeg",
-                "test image content".getBytes()
-        );
+        // Request (닉네임 + 이미지 ID)
         UpdateProfileRequest request = UpdateProfileRequest.builder()
                 .nickname("newNickname")
-                .profileImage(profileImage)
-                .build();
-
-        // ImageResponse
-        ImageResponse imageResponse = ImageResponse.builder()
                 .imageId(newImageId)
-                .imageUrl("https://s3.amazonaws.com/new-profile.jpg")
                 .build();
 
         // Mocking
         when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
                 .thenReturn(Optional.of(user));
         when(userRepository.existsByNickname("newNickname")).thenReturn(false);
-        when(imageService.uploadImage(profileImage)).thenReturn(imageResponse);
         when(imageRepository.findById(newImageId)).thenReturn(Optional.of(newImage));
 
         // When
@@ -302,7 +289,6 @@ class UserServiceTest {
         // 새 이미지: 영구 보존 (expires_at = NULL)
         assertThat(newImage.getExpiresAt()).isNull();
 
-        verify(imageService).uploadImage(profileImage);
         verify(imageRepository).findById(newImageId);
     }
 
@@ -333,27 +319,14 @@ class UserServiceTest {
                 .build();
         ReflectionTestUtils.setField(newImage, "imageId", newImageId);
 
-        // Request
-        MultipartFile profileImage = new MockMultipartFile(
-                "profileImage",
-                "new-profile.jpg",
-                "image/jpeg",
-                "test image content".getBytes()
-        );
+        // Request (이미지 ID만)
         UpdateProfileRequest request = UpdateProfileRequest.builder()
-                .profileImage(profileImage)
-                .build();
-
-        // ImageResponse
-        ImageResponse imageResponse = ImageResponse.builder()
                 .imageId(newImageId)
-                .imageUrl("https://s3.amazonaws.com/new-profile.jpg")
                 .build();
 
         // Mocking
         when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
                 .thenReturn(Optional.of(user));
-        when(imageService.uploadImage(profileImage)).thenReturn(imageResponse);
         when(imageRepository.findById(newImageId)).thenReturn(Optional.of(newImage));
 
         // When
@@ -365,7 +338,6 @@ class UserServiceTest {
         // 새 이미지: 영구 보존 (expires_at = NULL)
         assertThat(newImage.getExpiresAt()).isNull();
 
-        verify(imageService).uploadImage(profileImage);
         verify(imageRepository).findById(newImageId);
     }
 
@@ -424,7 +396,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("프로필 수정 - removeImage와 profileImage 동시 전달 시 profileImage 우선")
+    @DisplayName("프로필 수정 - removeImage와 imageId 동시 전달 시 imageId 우선")
     void updateProfile_RemoveImage_WithNewImage_Priority() {
         // Given
         Long userId = 1L;
@@ -460,28 +432,15 @@ class UserServiceTest {
                 .build();
         ReflectionTestUtils.setField(newImage, "imageId", newImageId);
 
-        // Request (removeImage: true + profileImage 동시 전달)
-        MultipartFile profileImage = new MockMultipartFile(
-                "profileImage",
-                "new-profile.jpg",
-                "image/jpeg",
-                "test image content".getBytes()
-        );
+        // Request (removeImage: true + imageId 동시 전달)
         UpdateProfileRequest request = UpdateProfileRequest.builder()
                 .removeImage(true)
-                .profileImage(profileImage)
-                .build();
-
-        // ImageResponse
-        ImageResponse imageResponse = ImageResponse.builder()
                 .imageId(newImageId)
-                .imageUrl("https://s3.amazonaws.com/new-profile.jpg")
                 .build();
 
         // Mocking
         when(userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE))
                 .thenReturn(Optional.of(user));
-        when(imageService.uploadImage(profileImage)).thenReturn(imageResponse);
         when(imageRepository.findById(newImageId)).thenReturn(Optional.of(newImage));
 
         // When
@@ -490,12 +449,11 @@ class UserServiceTest {
         // Then
         assertThat(response).isNotNull();
 
-        // profileImage가 우선 적용 → 이미지 교체 동작 (제거 X)
+        // imageId가 우선 적용 → 이미지 교체 동작 (제거 X)
         assertThat(oldImage.getExpiresAt()).isNotNull(); // TTL 복원
         assertThat(newImage.getExpiresAt()).isNull(); // 영구 보존
         assertThat(user.getProfileImage()).isEqualTo(newImage);
 
-        verify(imageService).uploadImage(profileImage);
         verify(imageRepository).findById(newImageId);
     }
 

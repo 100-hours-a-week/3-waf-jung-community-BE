@@ -2,11 +2,32 @@ spring:
   application:
     name: community
 
+  threads:
+    virtual:
+      enabled: true
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    primary:
+      url: ${DB_URL}
+      username: ${DB_USERNAME}
+      password: ${DB_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      hikari:
+        maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:30}
+        minimum-idle: ${HIKARI_MIN_IDLE:10}
+        connection-timeout: 20000
+    replica:
+      url: ${DB_READONLY_URL:${DB_URL}}
+      username: ${DB_USERNAME}
+      password: ${DB_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      hikari:
+        maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:30}
+        minimum-idle: ${HIKARI_MIN_IDLE:10}
+        connection-timeout: 20000
 
   servlet:
     multipart:
@@ -71,3 +92,6 @@ frontend:
 server:
   port: 8080
   address: 0.0.0.0  # 모든 네트워크 인터페이스에서 수신 (localhost, private IP, public IP)
+  shutdown: graceful
+  servlet:
+    context-path: ${SERVER_CONTEXT_PATH:/}  # 운영: /api/v1 (ALB 경유), 로컬: /

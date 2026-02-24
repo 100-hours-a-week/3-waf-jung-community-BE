@@ -39,10 +39,14 @@ public class StatsController {
      */
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStats() {
+        long totalPosts = postRepository.countByPostStatus(PostStatus.ACTIVE);
+        long totalUsers = userRepository.countByUserStatus(UserStatus.ACTIVE);
+        long totalComments = commentRepository.countByCommentStatus(CommentStatus.ACTIVE);
+
         Map<String, Long> stats = Map.of(
-                "totalPosts", postRepository.countByPostStatus(PostStatus.ACTIVE),
-                "totalUsers", userRepository.countByUserStatus(UserStatus.ACTIVE),
-                "totalComments", commentRepository.countByCommentStatus(CommentStatus.ACTIVE)
+                "totalPosts", totalPosts,
+                "totalUsers", totalUsers,
+                "totalComments", totalComments
         );
 
         return ResponseEntity.ok(ApiResponse.success("get_stats_success", stats));

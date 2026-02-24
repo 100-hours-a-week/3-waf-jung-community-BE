@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in values
+ami_id       = "ami-xxxxxxxxxxxxxxxxx"  # Packer-built AMI ID
+ecr_registry = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com"
+account_id   = "123456789012"
+
+db_password = "your-db-password"
+jwt_secret  = "your-jwt-secret"
+
+# If Route53 hosted zone already exists, set the zone ID
+# existing_route53_zone_id = "Z1234567890"

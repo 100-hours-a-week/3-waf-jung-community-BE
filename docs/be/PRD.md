@@ -1,8 +1,21 @@
+---
+name: product-requirements
+description: 기능 요구사항(FR) 및 비기능 요구사항(NFR) 정의. 새 기능 구현 전 FR-XXX-NNN 코드로 비즈니스 요구사항 확인, 우선순위(P0/P1) 파악 시 참조.
+---
+
+# 요구사항 명세서 (PRD)
+
+**Version**: 1.0  
+**Last Updated**: 2025-12-01  
+**Status**: 완료 (Phase 3.7까지 반영)  
+
+---
+
 # PRD.md - Product Requirements Document
 ## 문서 정보
 | 항목 | 내용 |
 |------|------|
-| 프로젝트명 | KTB Community Platform |
+| 프로젝트명 | DC2 Community Platform |
 | 버전 | 1.1 |
 | 문서 유형 | Product Requirements Document |
 ---
@@ -26,10 +39,10 @@
 #### FR-AUTH-001: 회원가입 (P0)
 **설명**: 신규 사용자가 이메일과 비밀번호로 계정 생성
 
-**입력**: email(필수,유니크), password(필수,8-20자), nickname(필수,10자,유니크), profile_image(선택, File)
-**요청 형식**: multipart/form-data
-**출력**: Access Token(30분), Refresh Token(7일)
-**검증**: 이메일/닉네임 중복, 비밀번호 정책(대/소/특수문자 각 1개+), 이미지 형식(JPG/PNG/GIF), 파일 크기(최대 5MB)
+**입력**: email(필수,유니크), password(필수,8-20자), nickname(필수,10자,유니크), profile_image(선택, File)  
+**요청 형식**: multipart/form-data  
+**출력**: Access Token(15분), Refresh Token(7일)  
+**검증**: 이메일/닉네임 중복, 비밀번호 정책(대/소/특수문자 각 1개+), 이미지 형식(JPG/PNG/GIF), 파일 크기(최대 5MB)  
 **에러**: 409(중복), 400(유효성), 413(파일 크기 초과), 400(유효하지 않은 파일 형식)
 
 ---
@@ -189,10 +202,10 @@
 ### 2.5 좋아요 기능
 
 #### FR-LIKE-001: 게시글 좋아요 추가 (P0)
-**입력**: 게시글 ID
-**출력**: 성공 메시지 (like_count는 클라이언트가 UI에서 +1 처리)
+**입력**: 게시글 ID  
+**출력**: 성공 메시지 (like_count는 클라이언트가 UI에서 +1 처리)  
 **검증**: 한 사용자당 한 게시글에 한 번만
-**부가 기능**: 좋아요 수 자동 증가 (DB 원자적 UPDATE)
+**부가 기능**: 좋아요 수 자동 증가 (DB 원자적 UPDATE)  
 **에러**: 409(중복 좋아요)
 **권한**: 인증된 사용자만
 **참고**: Optimistic Update 패턴 (API.md Section 6.1)
@@ -200,10 +213,10 @@
 ---
 
 #### FR-LIKE-002: 게시글 좋아요 취소 (P0)
-**입력**: 게시글 ID
-**출력**: 성공 메시지 (like_count는 클라이언트가 UI에서 -1 처리)
-**부가 기능**: 좋아요 수 자동 감소 (DB 원자적 UPDATE)
-**권한**: 인증된 사용자만
+**입력**: 게시글 ID  
+**출력**: 성공 메시지 (like_count는 클라이언트가 UI에서 -1 처리)  
+**부가 기능**: 좋아요 수 자동 감소 (DB 원자적 UPDATE)  
+**권한**: 인증된 사용자만  
 **참고**: Optimistic Update 패턴 (API.md Section 6.2)
 
 ---
@@ -234,11 +247,11 @@
 #### FR-IMAGE-003: 이미지 업로드 (P0)
 **설명**: 서버 측 이미지 업로드 및 검증 처리
 
-**입력**: multipart/form-data (이미지 파일)
-**출력**: image_id, image_url
-**검증**: 파일 형식 (JPG/PNG/GIF), 파일 크기 (최대 5MB)
-**처리**: S3 직접 저장 + TTL 1시간 (사용 시 expires_at NULL 전환)
-**에러**: 413 (파일 크기 초과), 400 (유효하지 않은 파일 형식)
+**입력**: multipart/form-data (이미지 파일)  
+**출력**: image_id, image_url  
+**검증**: 파일 형식 (JPG/PNG/GIF), 파일 크기 (최대 5MB)  
+**처리**: S3 직접 저장 + TTL 1시간 (사용 시 expires_at NULL 전환)  
+**에러**: 413 (파일 크기 초과), 400 (유효하지 않은 파일 형식)  
 **2가지 패턴**: **@docs/be/LLD.md Section 7.5** (Multipart 직접 vs 2단계 업로드)
 
 ---
@@ -249,9 +262,9 @@
 
 **NFR-SEC-001: 인증 및 권한**
 - JWT 기반 토큰 인증
-- Access Token: 30분, Refresh Token: 7일
+- Access Token: 15분, Refresh Token: 7일
 - **토큰 전달**: httpOnly Cookie (XSS 방어)
-  - access_token: HttpOnly, SameSite=Strict, Path=/, 30분
+  - access_token: HttpOnly, SameSite=Strict, Path=/, 15분
   - refresh_token: HttpOnly, SameSite=Strict, Path=/auth/refresh_token, 7일
 - **Refresh Token DB 관리**: user_tokens 테이블 (갱신/무효화)
 - **보안 강화**: JavaScript 접근 불가 (httpOnly), CSRF 방어 (SameSite=Strict)
@@ -340,7 +353,7 @@
 **NFR-MAINT-003: 문서화**
 - API 명세(**@docs/be/API.md**)
 - DB 스키마(**@docs/be/DDL.md**)
-- 개발 가이드(**@docs/CLAUDE.md**)
+- 개발 가이드(**@CLAUDE.md**)
 
 ---
 
@@ -372,14 +385,43 @@
 **기술 스택**: **@docs/be/LLD.md Section 1** 참조
 
 ### 5.2 비즈니스 제약사항
-- **현재 범위**: 백엔드 API만 (프론트엔드 별도)
-- **이미지**: 서버 측 업로드 및 검증 (현재: 로컬 스토리지, 향후: S3 연동)
-- **배포**: 추후 결정
+
+**현재 범위 (2025-12-09 기준):**
+- ✅ **백엔드 API**: Spring Boot 3.5.6 기반 REST API 완성
+- ✅ **프론트엔드**: Express.js 서버 렌더링 MPA (별도 프로젝트)
+- ✅ **이미지 저장소**: AWS S3 (하이브리드 업로드 방식)
+  - **현재**: Presigned URL (클라이언트 직접 S3 업로드) + Multipart (서버 경유) 병행
+  - **변경 이력**: 초기 로컬 스토리지 → S3 Multipart (Phase 3.5) → Presigned URL 추가 (Phase 3.7)
+  - **상세**: **@docs/be/LLD.md Section 7.5** (5가지 이미지 업로드 패턴)
+- ✅ **배포 인프라**: AWS (ALB + EC2 + ECR + RDS MySQL + S3)
+  - **현재**: GitHub Actions + Jenkins CI/CD 파이프라인 (Phase 4 완료)
+  - **변경 이력**: 배포 미정 → GitHub Actions SSH → Jenkins SSH (동적 배포)
+  - **상세**: **@docs/deployment/CI-CD.md**
+
+**토큰 관리:**
+- **현재**: RDB 저장 (user_tokens 테이블)
+- **향후**: Redis 전환 고려 (Phase 6, 프로젝트 종료로 보류)
+
+**성능 가정:**
+- 초기 트래픽 낮음 (단일 서버 충분)
+- 원자적 UPDATE로 동시성 제어 (PostStats)
+- **확장 전략**: ALB + Auto Scaling 대응 구조 (Jenkins 동적 배포)
 
 ### 5.3 가정사항
-- 사용자는 올바른 이메일 입력
-- 이미지는 서버를 통해 업로드 및 관리
-- 초기 동시 접속자 수 적음 (확장 대비 설계)
+
+**사용자 입력:**
+- 사용자는 올바른 이메일 형식 입력
+- 프론트엔드에서 1차 검증, 백엔드에서 2차 검증
+
+**이미지 업로드:**
+- **현재 (2025-12-09)**:
+  - **Presigned URL**: 클라이언트가 S3에 직접 업로드 (대용량 파일)
+  - **Multipart**: 서버 경유 업로드 (소규모 파일, 하위 호환성)
+- **변경 이력**: "서버 경유만" → "하이브리드 방식" (Phase 3.7)
+- **미사용 이미지**: TTL 1시간 후 배치 자동 삭제
+
+**동시 접속:**
+- 초기 동시 접속자 수 적음 (확장 대비 설계 완료)
 
 ---
 
@@ -392,3 +434,4 @@
 | 2025-10-10 | 1.2 | Phase 3 대비 문서 정합성 개선 (이미지 업로드, Rate Limiting 키 방식 반영) |
 | 2025-10-22 | 1.3 | 중복 제거 및 참조 최적화 (기술 스택, 비밀번호, Rate Limiting, 페이지네이션, 동시성, 이미지 업로드) |
 | 2025-11-03 | 1.4 | FR-USER-002 removeImage 파라미터 추가 (이미지 제거 기능 문서화) |
+| 2025-12-09 | 1.5 | Section 5 제약사항 최신화 (S3 Presigned URL, CI/CD 파이프라인, 변경 이력 명시) |

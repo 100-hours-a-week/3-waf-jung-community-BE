@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,11 +27,10 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class UserService {
-    
+
     private final UserRepository userRepository;
     private final ImageRepository imageRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ImageService imageService;
     
     /**
      * 사용자 프로필 조회 (FR-USER-001)
@@ -50,33 +48,33 @@ public class UserService {
      * 사용자 프로필 수정 (FR-USER-002)
      * - 본인만 수정 가능
      * - 닉네임 중복 확인
-     * - 프로필 이미지 업로드 (Multipart)
+     * - 프로필 이미지 참조 (2단계 업로드)
      */
     @Transactional
-    public UserResponse updateProfile(Long userId, Long authenticatedUserId, 
+    public UserResponse updateProfile(Long userId, Long authenticatedUserId,
                                      UpdateProfileRequest request) {
         // 권한 확인
         if (!userId.equals(authenticatedUserId)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED_ACCESS);
         }
-        
+
         User user = userRepository.findByUserIdAndUserStatus(userId, UserStatus.ACTIVE)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, 
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND,
                         "User not found or inactive with id: " + userId));
-        
+
         // 닉네임 변경 시 중복 확인
         if (request.getNickname() != null && !request.getNickname().equals(user.getNickname())) {
             if (userRepository.existsByNickname(request.getNickname())) {
-                throw new BusinessException(ErrorCode.NICKNAME_ALREADY_EXISTS, 
+                throw new BusinessException(ErrorCode.NICKNAME_ALREADY_EXISTS,
                         "Nickname already exists: " + request.getNickname());
             }
             user.updateNickname(request.getNickname());
         }
-        
+
         // ========== 프로필 이미지 처리 ==========
 
-        // Case 1: 새 이미지로 교체 (profileImage: File) - 최우선
-        if (request.getProfileImage() != null && !request.getProfileImage().isEmpty()) {
+        // Case 1: 새 이미지로 교체 (imageId: Long) - 최우선
+        if (request.getImageId() != null) {
             // 1. 기존 이미지 TTL 복원 (고아 이미지 처리)
             Image oldImage = user.getProfileImage();
             if (oldImage != null) {
@@ -85,12 +83,12 @@ public class UserService {
                          oldImage.getImageId(), oldImage.getExpiresAt());
             }
 
-            // 2. 새 이미지 업로드
-            com.ktb.community.dto.response.ImageResponse imageResponse = imageService.uploadImage(request.getProfileImage());
-            Image newImage = imageRepository.findById(imageResponse.getImageId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
+            // 2. 새 이미지 참조
+            Image newImage = imageRepository.findById(request.getImageId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND,
+                            "Invalid or expired image ID: " + request.getImageId()));
 
-            // 3. 새 이미지 연결 (영구 보존)
+            // 3. 새 이미지 연결 (TTL 해제 → 영구 보존)
             newImage.clearExpiresAt();
             user.updateProfileImage(newImage);
 

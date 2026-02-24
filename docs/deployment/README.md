@@ -1,75 +1,136 @@
 # EC2 배포 가이드
 
-KTB Community Spring Boot 백엔드를 AWS EC2에 배포하기 위한 완벽한 가이드입니다.
+DC2 Community Spring Boot 백엔드를 AWS EC2에 배포하기 위한 완벽한 가이드입니다.
 
-## 📚 문서 구조
+## 문서 구조
 
-### 1. **EC2-DEPENDENCIES.md** (⭐ 필독)
-아무것도 없는 EC2 인스턴스에서 Spring Boot 애플리케이션을 실행하기 위한 **완전한 의존성 목록**
+이 가이드는 3개의 문서로 구성되어 있으며, 각 문서는 독립적으로 사용할 수 있습니다.
+
+### 1. **README.md** (이 문서)
+**Master Index + Common Reference**
 
 **포함 내용:**
-- ✅ Java 21 JDK 설치 (Amazon Corretto vs OpenJDK)
-- ✅ MySQL 8.0+ 설정 (로컬 vs RDS)
-- ✅ Gradle 8.14.3 빌드
-- ✅ 시스템 라이브러리 (gcc, git, curl 등)
-- ✅ 환경 변수 (JWT_SECRET, AWS_S3_BUCKET 등)
-- ✅ 선택적 도구 (Nginx, Docker, systemd 등)
-- ✅ 설치 순서 (권장 9단계)
-- ✅ 트러블슈팅 및 보안 체크리스트
+- 기술 스택 및 버전 정보 (공통 참조)
+- 필수 환경 변수 (전체 목록)
+- 시스템 요구사항 (배포 크기 추정)
+- 계층별 의존성 다이어그램
+- 배포 시나리오 개요 (A/B/C)
+- 빠른 시작 가이드
+- 보안 가이드
+- 모니터링 및 트러블슈팅
 
-**대상:** 개발자, DevOps 엔지니어
+**대상:** 모든 사용자 (첫 번째로 읽을 문서)
 
 ---
 
-### 2. **EC2-QUICK-SETUP.sh** (⚡ 빠른 배포)
-**자동화 셸 스크립트** - `bash EC2-QUICK-SETUP.sh` 한 줄로 자동 배포
+### 2. **EC2-DEPENDENCIES.md**
+**수동 배포 가이드** - EC2에 직접 배포하기 위한 완전한 의존성 목록
 
-**자동화 항목:**
-- ✅ 시스템 업데이트
-- ✅ Java 21 설치
-- ✅ MySQL 설치 (선택적)
-- ✅ 프로젝트 클론 및 빌드
-- ✅ 환경 변수 설정 (.env)
-- ✅ systemd 서비스 등록
-- ✅ 애플리케이션 시작 및 검증
+**포함 내용:**
+- Java 21 JDK 설치 (Amazon Corretto vs OpenJDK)
+- MySQL 8.0+ 설정 (로컬 vs RDS)
+- Gradle 8.14.3 빌드
+- 시스템 라이브러리 (gcc, git, curl 등)
+- 선택적 도구 (Nginx, Docker, systemd 등)
+- 설치 순서 (권장 9단계)
+- 트러블슈팅 및 보안 체크리스트
 
-**사용법:**
+**대상:** 로컬 개발, 수동 배포
+
+**참고:** 공통 정보(기술 스택, 환경 변수)는 README.md 참조
+
+---
+
+### 3. **CI-CD.md**
+**자동 배포 가이드** - GitHub Actions + Jenkins를 통한 프로덕션 CI/CD 파이프라인
+
+**포함 내용:**
+- GitHub Actions 워크플로우 (Test, Build, ECR Push)
+- Jenkins 파이프라인 (SSM Parameter 로드, SSH 배포)
+- AWS ECR OIDC 인증
+- Jenkins 서버 설치 및 설정
+- ALB Target Group 기반 동적 배포
+- 배포 플로우 및 롤백 절차
+- 트러블슈팅 가이드
+
+**대상:** 프로덕션 자동 배포
+
+**참고:** 수동 배포는 EC2-DEPENDENCIES.md 참조
+
+---
+
+## 기술 스택 및 버전 정보
+
+### 핵심 기술 스택
+
+| 컴포넌트 | 버전 | 출처 |
+|---------|------|------|
+| Java | 21 (LTS) | build.gradle:13 |
+| Spring Boot | 3.5.6 | build.gradle:3 |
+| Gradle | 8.14.3 | gradle-wrapper.properties |
+| MySQL | 8.0+ | application.yaml:9 |
+| AWS SDK | 2.20.0 | build.gradle:61 |
+
+### 런타임 라이브러리
+
+| 라이브러리 | 버전 | 용도 |
+|-----------|------|------|
+| JJWT | 0.12.3 | JWT 토큰 생성/검증 |
+| Bucket4j | 8.10.1 | Rate Limiting (Token Bucket) |
+| Caffeine | 3.1.8 | 로컬 캐시 |
+| Spring Security | 3.5.6 | 인증/인가, BCrypt |
+| HikariCP | (자동) | 커넥션 풀 |
+
+---
+
+## 필수 환경 변수
+
+**7개 필수 변수:**
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- `JWT_SECRET` (256bit 이상)
+- `AWS_S3_BUCKET`, `AWS_REGION`
+- `FRONTEND_URL`
+
+**상세 설정 방법**: @docs/deployment/EC2-DEPENDENCIES.md Section "환경 변수 (공통 정보)"
+
+**빠른 참조:**
 ```bash
-# 1. 스크립트 다운로드
-curl -O https://raw.githubusercontent.com/<your-org>/community/main/docs/deployment/EC2-QUICK-SETUP.sh
+# JWT Secret 생성
+openssl rand -base64 32
 
-# 2. 스크립트 수정 (환경 변수 입력)
-vim EC2-QUICK-SETUP.sh
-# GIT_REPO, DB_PASSWORD, JWT_SECRET 등 수정
-
-# 3. 실행
-bash EC2-QUICK-SETUP.sh
-
-# 4. 서비스 확인
-sudo systemctl status community
+# .env 파일 생성
+chmod 600 .env
 ```
 
-**시간:** ~30분 (네트워크 속도에 따라)
+---
+
+## 계층별 의존성 다이어그램
+
+```
+┌─────────────────────────────────────────────┐
+│  Application Layer                          │
+│  KTB Community Spring Boot 3.5.6           │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│  Runtime Layer                              │
+│  Java 21 + Spring Boot + Gradle 8.14       │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│  Data/External Services                     │
+│  MySQL 8.0+ | AWS S3 | Redis (Phase 6)    │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│  Infrastructure (Optional)                  │
+│  systemd | Nginx | Docker | CloudWatch    │
+└─────────────────────────────────────────────┘
+```
 
 ---
 
-### 3. **DEPENDENCIES-MATRIX.md** (📊 참고)
-모든 의존성을 계층별, 시나리오별로 분류한 **참고 문서**
-
-**포함 내용:**
-- ✅ 계층별 의존성 맵 (Runtime, Database, Infrastructure)
-- ✅ 각 의존성의 용도, 버전, 설치 방법
-- ✅ build.gradle의 모든 의존성 상세
-- ✅ 시스템 라이브러리 목록
-- ✅ 배포 시나리오별 가이드 (최소, 운영, Docker)
-- ✅ 메모리, 디스크 크기 추정
-- ✅ 버전 호환성 매트릭스
-
-**대상:** 아키텍처 검토, 용량 계획
-
----
-
-## 🚀 빠른 시작 (5분)
+## 빠른 시작 (5분)
 
 ### 최소 설정으로 배포
 
@@ -110,7 +171,7 @@ java -Xmx512m -Xms256m -jar build/libs/community-0.0.1-SNAPSHOT.jar
 
 ---
 
-## 📋 체크리스트
+## 체크리스트
 
 ### 배포 전
 - [ ] EC2 인스턴스 생성 (Amazon Linux 2, t3.small 이상)
@@ -129,113 +190,81 @@ java -Xmx512m -Xms256m -jar build/libs/community-0.0.1-SNAPSHOT.jar
 
 ---
 
-## 🛠️ 배포 시나리오
+## 배포 시나리오
 
 ### 시나리오 A: 로컬 개발 (로컬 MySQL)
 
-```bash
-# EC2: t3.micro, 1GB RAM
-# 설정 시간: ~15분
+**환경:** EC2 t3.micro, 1GB RAM
+**설정 시간:** ~15분
+**상세 가이드:** EC2-DEPENDENCIES.md
 
+```bash
 # 1. Java + 기본 도구
 sudo yum install -y java-21-amazon-corretto-devel git
 
 # 2. MySQL 로컬 설치
 sudo yum install -y mysql-server
 sudo systemctl start mysqld
-mysql -u root -p
 
 # 3. 프로젝트 빌드 및 실행
 ./gradlew bootJar
 java -jar build/libs/community-0.0.1-SNAPSHOT.jar
 ```
 
-**장점:**
-- 최소 비용 (AWS Free Tier 가능)
-- 빠른 설정
-
-**단점:**
-- 백업 불가
-- 확장성 제한
-- 운영 부담
-
 ---
 
 ### 시나리오 B: 운영 배포 (RDS + ALB)
 
-```bash
-# EC2: t3.small, 2GB RAM
-# RDS: db.t3.micro
-# 설정 시간: ~30분
+**환경:** EC2 t3.small, RDS, ALB
+**설정 시간:** ~30분
+**상세 가이드:** EC2-DEPENDENCIES.md Section 7
 
+**아키텍처:**
+```
+Route 53 → ALB (80/443) → EC2 (8080) → RDS MySQL
+                                      → S3 (이미지)
+```
+
+**주요 설정:**
+```bash
 # 1. Java + 모니터링 도구
 sudo yum install -y java-21-amazon-corretto-devel git curl htop
 
 # 2. RDS 설정 (AWS 콘솔)
-#    - MySQL 8.0 생성
-#    - 보안 그룹: EC2 인스턴스만 허용 (포트 3306)
-#    - 자동 백업 활성화
+#    - MySQL 8.0, 보안 그룹, 자동 백업
 
-# 3. 프로젝트 배포
-./gradlew bootJar
+# 3. systemd 서비스 등록
+#    - 상세: EC2-DEPENDENCIES.md
 
-# 4. systemd 서비스 등록
-#    - EC2-DEPENDENCIES.md의 systemd 섹션 참조
-
-# 5. ALB 설정 (AWS 콘솔)
-#    - 대상 그룹: EC2 인스턴스 (포트 8080)
-#    - 리스너: 포트 80 → 443 (HTTPS)
+# 4. ALB 설정
+#    - Target Group: EC2 (8080)
+#    - Listener: 80/443
 ```
-
-**아키텍처:**
-```
-Route 53
-   ↓
-ALB (Port 80 → 443)
-   ↓
-EC2 (Port 8080)
-   ↓
-RDS MySQL
-S3 (이미지)
-```
-
-**장점:**
-- 자동 백업
-- 확장성 (Read Replicas, Multi-AZ)
-- 모니터링 (CloudWatch)
-- SSL/TLS
-
-**비용:** ~$50-100/월
 
 ---
 
-### 시나리오 C: 컨테이너 배포 (ECS + RDS)
+### 시나리오 C: CI/CD 자동 배포
 
-```bash
-# Docker 이미지 빌드
-./gradlew bootJar
-docker build -t community:latest .
+**환경:** GitHub Actions + Jenkins + ECR + SSM
+**설정 시간:** 초기 1시간, 이후 배포 7-11분
+**상세 가이드:** CI-CD.md
 
-# ECR에 푸시
-aws ecr get-login-password --region ap-northeast-2 | \
-  docker login --username AWS --password-stdin <account-id>.dkr.ecr.ap-northeast-2.amazonaws.com
-docker tag community:latest <account-id>.dkr.ecr.ap-northeast-2.amazonaws.com/community:latest
-docker push <account-id>.dkr.ecr.ap-northeast-2.amazonaws.com/community:latest
-
-# ECS Task Definition 생성 (AWS 콘솔)
-# ECS Service 생성 (ALB 연동)
+**파이프라인:**
+```
+PR Merge → GitHub Actions (Test/Build/ECR Push)
+        → Jenkins (Target Group 조회, SSM 로드, SSH 배포)
+        → EC2 (Docker 컨테이너 재시작)
 ```
 
-**장점:**
-- 무중단 배포
-- 자동 스케일링
-- 버전 관리
-
-**비용:** ~$30-50/월
+**핵심 기능:**
+- 무중단 배포 (Target Group 기반)
+- IP 하드코딩 없음 (ASG 대응)
+- 환경 변수 중앙 관리 (SSM Parameter Store)
+- 롤백 용이 (ECR 이미지 버전 관리)
 
 ---
 
-## 🔧 환경별 설정
+## 환경별 설정
 
 ### 개발 환경
 ```bash
@@ -266,20 +295,35 @@ FRONTEND_URL=https://community.example.com
 
 ---
 
-## 📊 시스템 요구사항
+## 시스템 요구사항
 
 | 항목 | 최소 | 권장 | 프로덕션 |
 |------|------|------|---------|
-| **EC2** | t3.micro | t3.small | t3.medium 이상 |
+| **EC2** | t3.micro | t3.small | t3.medium+ |
 | **vCPU** | 1 | 2 | 2-4 |
 | **RAM** | 1GB | 2GB | 4-8GB |
-| **디스크** | 10GB | 20GB | 50GB 이상 |
+| **디스크** | 10GB | 20GB | 50GB+ |
 | **DB** | Local MySQL | RDS db.t3.micro | RDS db.t3.small |
-| **스토리지** | EBS | EBS (gp3) | EBS (gp3) + S3 |
+
+### 배포 크기 추정
+
+| 컴포넌트 | 크기 | 비고 |
+|---------|------|------|
+| 애플리케이션 JAR | ~20MB | Spring Boot 포함 |
+| Java 21 JDK | ~450MB | Amazon Corretto |
+| MySQL 8.0 | ~1GB | 로컬 설치 시만 |
+| Gradle | ~100MB | 첫 실행 시 자동 다운로드 |
+| **총 필요 공간** | **최소 2GB** | **권장 10GB+** |
+
+**런타임 메모리 사용량:**
+- JVM Heap: 512MB (권장 `-Xmx512m`)
+- OS/Buffer: ~200MB
+- MySQL: ~100MB (로컬 설치 시)
+- **총 RAM**: 최소 1GB, 권장 2GB+
 
 ---
 
-## 🔒 보안 가이드
+## 보안 가이드
 
 ### 1. AWS IAM
 ```bash
@@ -334,7 +378,7 @@ aws secretsmanager create-secret --name community/db-password
 
 ---
 
-## 📈 모니터링 및 로깅
+## 모니터링 및 로깅
 
 ### CloudWatch 로그
 ```bash
@@ -374,7 +418,7 @@ ss -tulpn | grep 8080  # 포트 확인
 
 ---
 
-## 🐛 일반적인 문제 및 해결
+## 일반적인 문제 및 해결
 
 ### "Access Denied" (S3)
 ```bash
@@ -412,7 +456,7 @@ kill -9 <PID>  # 종료
 
 ---
 
-## 📚 추가 자료
+## 추가 자료
 
 ### 프로젝트 문서
 - **기술 스택**: @docs/be/LLD.md Section 1
@@ -433,7 +477,7 @@ kill -9 <PID>  # 종료
 
 ---
 
-## 🎯 다음 단계
+## 다음 단계
 
 1. **선택** 
    - 최소 배포: EC2-QUICK-SETUP.sh 실행
@@ -456,7 +500,7 @@ kill -9 <PID>  # 종료
 
 ---
 
-## 📞 지원 및 피드백
+## 지원 및 피드백
 
 - **문제 보고**: GitHub Issues
 - **개선 제안**: GitHub Discussions

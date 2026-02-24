@@ -1,0 +1,161 @@
+name: CD (Direct Deploy)
+
+on:
+  pull_request:
+    branches: [pp]
+    types: [closed]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.github/workflows/ci.yml'
+
+env:
+  REGISTRY: registry.ktb-waf.cloud
+  BE_IMAGE_NAME: community-backend
+  FE_IMAGE_NAME: community-frontend
+
+jobs:
+#  test:
+#    runs-on: ubuntu-latest
+#    if: github.event.pull_request.merged == true
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Setup Java 21
+#        uses: actions/setup-java@v4
+#        with:
+#          java-version: '21'
+#          distribution: 'temurin'
+#
+#      - name: Cache Gradle
+#        uses: actions/cache@v4
+#        with:
+#          path: |
+#            ~/.gradle/caches
+#            ~/.gradle/wrapper
+#          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+#          restore-keys: ${{ runner.os }}-gradle-
+#
+#      - name: Build and Test
+#        run: |
+#          chmod +x gradlew
+#          ./gradlew build test
+
+  build-backend:
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image_tag: ${{ steps.tag.outputs.TAG }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate Image Tag
+        id: tag
+        run: echo "TAG=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BE_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.BE_IMAGE_NAME }}:${{ steps.tag.outputs.TAG }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.BE_IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.BE_IMAGE_NAME }}:buildcache,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-backend
+    environment: pp
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        env:
+          BE_IMAGE_TAG: ${{ needs.build-backend.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            set -e
+
+            # Prerequisites check
+            echo "=== Checking prerequisites ==="
+            command -v docker >/dev/null 2>&1 || { echo "Docker not found"; exit 1; }
+            docker compose version >/dev/null 2>&1 || { echo "Docker Compose not found"; exit 1; }
+            command -v aws >/dev/null 2>&1 || { echo "AWS CLI not found"; exit 1; }
+
+            # Load environment variables from SSM
+            echo "=== Loading environment variables from SSM ==="
+            AWS_REGION="ap-northeast-2"
+            get_param() {
+              aws ssm get-parameter --name "$1" --with-decryption --query 'Parameter.Value' --output text --region "$AWS_REGION" 2>/dev/null || echo ""
+            }
+
+            export DB_URL=$(get_param "/community/pp/DB_URL")
+            export DB_USERNAME=$(get_param "/community/pp/DB_USERNAME")
+            export DB_PASSWORD=$(get_param "/community/pp/DB_PASSWORD")
+            export JWT_SECRET=$(get_param "/community/JWT_SECRET")
+            export AWS_S3_BUCKET=$(get_param "/community/AWS_S3_BUCKET")
+            export AWS_REGION=$(get_param "/community/AWS_REGION")
+            export FRONTEND_URL=$(get_param "/community/FRONTEND_URL")
+            export BACKEND_URL=$(get_param "/community/BACKEND_URL")
+
+            # Image registry and tags
+            export REGISTRY="${{ env.REGISTRY }}"
+            export IMAGE_NAME="${{ env.BE_IMAGE_NAME }}"
+            export BE_IMAGE_TAG="${BE_IMAGE_TAG:-latest}"
+            export FE_IMAGE_TAG="${FE_IMAGE_TAG:-latest}"
+
+            # Validate required variables
+            if [ -z "$DB_URL" ] || [ -z "$JWT_SECRET" ]; then
+              echo "ERROR: Required SSM parameters not found"
+              exit 1
+            fi
+
+            # Navigate to deployment directory
+            cd /home/ubuntu/app/be || { echo "Deployment directory not found"; exit 1; }
+
+            # Pull and deploy (backend only)
+            echo "=== Pulling backend image ==="
+            sudo -E docker compose pull
+
+            echo "=== Stopping old backend container ==="
+            sudo -E docker compose down --remove-orphans || true
+
+            echo "=== Starting backend container ==="
+            sudo -E docker compose up -d
+
+            # Health check
+            echo "=== Running health check ==="
+            HEALTH_OK=false
+            for i in $(seq 1 180); do
+              if curl -sf http://localhost:8080/health >/dev/null 2>&1; then
+                echo "✓ Backend health check passed (${i}s)"
+                HEALTH_OK=true
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "$HEALTH_OK" = "false" ]; then
+              echo "✗ Health check failed"
+              echo "=== Container logs (last 50 lines) ==="
+              sudo -E docker compose logs --tail 50
+              exit 1
+            fi
+
+            # Cleanup old images
+            echo "=== Cleaning up old images ==="
+            sudo docker image prune -af --filter "until=24h" || true
+
+            echo "=== Deployment completed successfully ==="
+          ENDSSH

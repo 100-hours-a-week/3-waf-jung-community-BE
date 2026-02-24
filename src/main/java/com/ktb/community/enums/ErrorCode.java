@@ -47,6 +47,7 @@ public enum ErrorCode {
     IMAGE_NOT_FOUND("IMAGE-001", "Image not found", HttpStatus.NOT_FOUND),
     FILE_TOO_LARGE("IMAGE-002", "File size exceeds limit", HttpStatus.PAYLOAD_TOO_LARGE),
     INVALID_FILE_TYPE("IMAGE-003", "Invalid file type", HttpStatus.BAD_REQUEST),
+    INVALID_IMAGE_URL("IMAGE-004", "Invalid image URL format", HttpStatus.BAD_REQUEST),
     
     // ==================== 공통 (COMMON) ====================
     INVALID_INPUT("COMMON-001", "Invalid input data", HttpStatus.BAD_REQUEST),

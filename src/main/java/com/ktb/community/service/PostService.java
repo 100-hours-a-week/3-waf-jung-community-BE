@@ -287,6 +287,7 @@ public class PostService {
      * 게시글 삭제 (FR-POST-005)
      * - 작성자 본인만 삭제 가능
      * - Soft Delete (상태 → DELETED)
+     * - 연결된 이미지 TTL 복원 (고아 이미지 처리)
      */
     @Transactional
     public void deletePost(Long postId, Long userId) {
@@ -300,6 +301,9 @@ public class PostService {
                     "Not authorized to delete this post");
         }
 
+        // 연결된 이미지 TTL 복원 + 브릿지 삭제 (고아 이미지 처리)
+        restoreExpiresAtAndDeleteBridge(postId);
+
         // Soft Delete
         post.updateStatus(PostStatus.DELETED);
 
@@ -308,10 +312,7 @@ public class PostService {
 
     /**
      * 게시글의 기존 이미지 TTL 복원 + 브릿지 삭제
-     * - PostImage 조회 (Fetch Join) → Image TTL 복원 (now + 1h) → 브릿지 삭제
-     * - 배치 작업(ImageCleanupBatchService)이 expires_at < NOW() 조건으로 자동 삭제
-     *
-     * @param postId 게시글 ID
+     * - 배치에서 expires_at < NOW() 조건으로 자동 삭제
      */
     private void restoreExpiresAtAndDeleteBridge(Long postId) {
         log.debug("[DEBUG] restoreExpiresAtAndDeleteBridge 시작: postId={}", postId);

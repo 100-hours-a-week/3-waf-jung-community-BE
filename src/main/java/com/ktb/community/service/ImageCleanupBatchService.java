@@ -21,6 +21,7 @@ import java.util.List;
 /**
  * 이미지 정리 배치 서비스
  * - 고아 이미지 자동 삭제 (expires_at < NOW())
+ * - 영구 고아 이미지 자동 삭제 (expires_at IS NULL + 7일 안전 마진)
  * - 매일 새벽 3시 실행
  */
 @Slf4j
@@ -35,8 +36,7 @@ public class ImageCleanupBatchService {
     private String bucketName;
 
     /**
-     * Self-injection 생성자
-     * @param self @Lazy로 주입하여 순환 의존성 방지
+     * Self-injection 생성자 (@Lazy로 순환 의존성 방지)
      */
     public ImageCleanupBatchService(
             ImageRepository imageRepository,
@@ -92,13 +92,55 @@ public class ImageCleanupBatchService {
     }
 
     /**
-     * 독립적인 트랜잭션으로 이미지 삭제
-     * - REQUIRES_NEW: 호출자의 트랜잭션과 무관하게 새 트랜잭션 생성
-     * - 이미지 삭제 실패 시 해당 트랜잭션만 롤백
-     * - 다른 이미지 삭제에 영향을 주지 않음
-     * 
-     * @param image 삭제할 이미지 엔티티
-     * @throws Exception S3 삭제 또는 DB 삭제 실패 시
+     * 영구 고아 이미지 정리 배치 작업 (Phase 5)
+     * - 스케줄: 매일 새벽 4시 (CRON: 0 0 4 * * ?)
+     * - 영구 보존(expires_at=NULL)이지만 아무 곳에도 연결되지 않은 이미지 삭제
+     * - 7일 안전 마진: 생성 후 7일이 지난 이미지만 삭제
+     *
+     * 시나리오:
+     * - 프로필 수정 중 새 이미지 업로드 후 저장 취소
+     * - 게시글 작성 중 이미지 업로드 후 작성 취소
+     * - clearExpiresAt() 호출 후 실제 연결이 완료되지 않은 경우
+     */
+    @Scheduled(cron = "0 0 4 * * ?")
+    public void cleanupPermanentOrphanImages() {
+        log.info("[Batch] 영구 고아 이미지 정리 배치 시작");
+        long startTime = System.currentTimeMillis();
+
+        // 7일 전 기준 (안전 마진)
+        LocalDateTime threshold = LocalDateTime.now().minusDays(7);
+        List<Image> permanentOrphans = imageRepository.findPermanentOrphans(threshold);
+
+        if (permanentOrphans.isEmpty()) {
+            log.info("[Batch] 삭제할 영구 고아 이미지 없음");
+            return;
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+
+        for (Image image : permanentOrphans) {
+            try {
+                // 프록시를 통해 호출하여 REQUIRES_NEW 트랜잭션 적용
+                self.deleteImageInNewTransaction(image);
+                successCount++;
+                log.debug("[Batch] 영구 고아 이미지 삭제 성공: imageId={}", image.getImageId());
+
+            } catch (Exception e) {
+                failCount++;
+                log.error("[Batch] 영구 고아 이미지 삭제 실패: imageId={}, error={}",
+                         image.getImageId(), e.getMessage(), e);
+            }
+        }
+
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        log.info("[Batch] 영구 고아 이미지 정리 완료: 성공={}, 실패={}, 전체={}, 소요시간={}ms",
+                successCount, failCount, permanentOrphans.size(), elapsedTime);
+    }
+
+    /**
+     * 독립적인 트랜잭션으로 이미지 삭제 (REQUIRES_NEW)
+     * - 실패 시 해당 트랜잭션만 롤백
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteImageInNewTransaction(Image image) {

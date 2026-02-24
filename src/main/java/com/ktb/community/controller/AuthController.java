@@ -113,6 +113,31 @@ public class AuthController {
     }
 
     /**
+     * Guest Token 발급 (회원가입용)
+     * GET /auth/guest-token
+     *
+     * 용도: 회원가입 시 프로필 이미지 업로드를 위한 임시 토큰
+     * - JWT가 없으면 Lambda 이미지 업로드 불가
+     * - 회원가입 완료 후 정식 AT/RT로 교체
+     *
+     * 특징:
+     * - 유효기간: 5분
+     * - subject: "0" (게스트 전용 ID)
+     * - role: GUEST
+     * - Refresh Token 없음 (일회용)
+     * - Rate Limit 없음 (회원가입 페이지 로드 시 자동 발급)
+     *
+     * Lambda 검증:
+     * - Lambda는 role: GUEST 또는 userId == 0 체크로 회원가입 업로드 판별
+     * - TTL 1시간 설정 (회원가입 안 하면 자동 삭제)
+     */
+    @GetMapping("/guest-token")
+    public ResponseEntity<ApiResponse<String>> getGuestToken() {
+        String guestToken = authService.generateGuestToken();
+        return ResponseEntity.ok(ApiResponse.success("guest_token_issued", guestToken));
+    }
+
+    /**
      * Cookie 설정 헬퍼 메서드
      * @param name 쿠키 이름
      * @param value 쿠키 값
